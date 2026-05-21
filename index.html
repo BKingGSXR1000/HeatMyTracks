@@ -1,0 +1,2985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local GPS Heatmap</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      overflow: hidden;
+    }
+
+    body.light {
+      background: #f8fafc;
+      color: #0f172a;
+    }
+
+    #map {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #0f172a;
+    }
+
+    body.light #map {
+      background: #e2e8f0;
+    }
+
+    .map-theme-panel {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      z-index: 1000;
+      min-width: 260px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .map-theme-panel label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+
+    body.light .map-theme-panel label {
+      color: #64748b;
+    }
+
+    .map-theme-panel select {
+      width: 100%;
+      appearance: none;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 12px;
+      padding: 8px 34px 8px 11px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #f8fafc;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    body.light .map-theme-panel select {
+      background: white;
+      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.16);
+    }
+
+    body.light .control-panel p {
+      color: #cbd5e1;
+    }
+
+    .date-panel {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(1260px, calc(100vw - 470px));
+      z-index: 1000;
+      padding: 12px;
+      border-radius: 22px;
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+    }
+
+    .control-panel {
+      position: absolute;
+      right: 18px;
+      top: 18px;
+      width: min(410px, calc(100vw - 36px));
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      z-index: 1000;
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+    }
+
+    .panel-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .control-panel h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .precompute-help-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .precompute-help-wrap:hover .nice-tooltip,
+    .precompute-help-wrap:focus-within .nice-tooltip {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .precompute-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: #cbd5e1;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .precompute-toggle input {
+      width: 14px;
+      height: 14px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+
+    body.light .precompute-toggle {
+      background: rgba(241, 245, 249, 0.88);
+      color: #475569;
+      border-color: rgba(15, 23, 42, 0.12);
+    }
+
+    .nice-tooltip {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: 280px;
+      z-index: 2000;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+      padding: 11px 12px;
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.94);
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.26);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+      font-size: 12px;
+      line-height: 1.42;
+      font-weight: 500;
+    }
+
+    .nice-tooltip::before {
+      content: "";
+      position: absolute;
+      top: -6px;
+      right: 24px;
+      width: 10px;
+      height: 10px;
+      background: rgba(2, 6, 23, 0.94);
+      border-left: 1px solid rgba(148, 163, 184, 0.26);
+      border-top: 1px solid rgba(148, 163, 184, 0.26);
+      transform: rotate(45deg);
+    }
+
+    .nice-tooltip strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #f8fafc;
+      font-size: 12px;
+    }
+
+    body.light .nice-tooltip,
+    body.light .nice-tooltip::before {
+      background: rgba(255, 255, 255, 0.96);
+      color: #334155;
+      border-color: rgba(15, 23, 42, 0.14);
+    }
+
+    body.light .nice-tooltip strong {
+      color: #0f172a;
+    }
+
+    .control-panel p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.38;
+      color: #cbd5e1;
+    }
+
+    .import-intro {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .drop-zone {
+      margin-top: 0;
+      padding: 18px;
+      border-radius: 18px;
+      border: 1.5px dashed rgba(147, 197, 253, 0.55);
+      background: rgba(30, 41, 59, 0.58);
+      text-align: center;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+    }
+
+    .drop-zone.drag-over {
+      transform: scale(1.015);
+      border-color: rgba(96, 165, 250, 0.95);
+      background: rgba(37, 99, 235, 0.18);
+    }
+
+    body.light .drop-zone {
+      background: rgba(241, 245, 249, 0.88);
+      border-color: rgba(37, 99, 235, 0.38);
+    }
+
+    body.light .drop-zone.drag-over {
+      background: rgba(37, 99, 235, 0.1);
+      border-color: rgba(37, 99, 235, 0.8);
+    }
+
+    .drop-zone strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: #f8fafc;
+    }
+
+    body.light .drop-zone strong {
+      color: #0f172a;
+    }
+
+    .drop-zone span {
+      display: block;
+      font-size: 12px;
+      color: #cbd5e1;
+      margin-bottom: 14px;
+    }
+
+    body.light .drop-zone span {
+      color: #64748b;
+    }
+
+    .secondary-button {
+      width: 100%;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(15, 23, 42, 0.75);
+      color: #e5e7eb;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .secondary-button:hover {
+      background: rgba(30, 41, 59, 0.95);
+    }
+
+    body.light .secondary-button {
+      background: white;
+      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.16);
+    }
+
+    body.light .secondary-button:hover {
+      background: #f1f5f9;
+    }
+
+    .file-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 14px;
+      padding: 10px 14px;
+      background: #2563eb;
+      color: white;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+    }
+
+    .file-button:hover {
+      background: #1d4ed8;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 10px 0 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    body.light .toggle-row,
+    body.light .slider-row,
+    body.light .date-filter,
+    body.light .status-card,
+    body.light .log-panel {
+      background: rgba(30, 41, 59, 0.72);
+      border-color: rgba(148, 163, 184, 0.16);
+    }
+
+    .toggle-row label,
+    .slider-row label {
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+
+    .slider-row {
+      margin: 10px 0 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .slider-value {
+      font-size: 12px;
+      color: #cbd5e1;
+      font-weight: 700;
+    }
+
+    body.light .slider-value {
+      color: #475569;
+    }
+
+    .slider-row input[type="range"] {
+      width: 100%;
+      accent-color: #38bdf8;
+    }
+
+    .date-filter {
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .date-filter-controls {
+      display: grid;
+      grid-template-columns: 150px 150px minmax(90px, 120px) 130px 150px 90px 90px 90px 90px;
+      grid-template-rows: auto 44px;
+      align-items: end;
+      gap: 8px 10px;
+    }
+
+    .date-filter-grid {
+      display: contents;
+    }
+
+    .date-from-field {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .date-to-field {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .date-field label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    body.light .date-field label {
+      color: #64748b;
+    }
+
+    .date-field input[type="date"] {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 12px;
+      padding: 8px 9px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #f8fafc;
+      font: inherit;
+      font-size: 13px;
+      color-scheme: dark;
+    }
+
+    body.light .date-field input[type="date"] {
+      background: white;
+      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.16);
+      color-scheme: light;
+    }
+
+    .date-count-pill {
+      grid-column: 3;
+      grid-row: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 36px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.48);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    body.light .date-count-pill {
+      background: rgba(255, 255, 255, 0.78);
+      color: #475569;
+      border-color: rgba(15, 23, 42, 0.12);
+    }
+
+    .date-preset-field {
+      grid-column: 4;
+      grid-row: 1;
+    }
+
+    .date-play-speed-field {
+      grid-column: 8;
+      grid-row: 1;
+    }
+
+    .date-play-speed-field label,
+    .date-preset-field label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .date-play-speed-field select,
+    .date-preset-field select {
+      width: 100%;
+      height: 36px;
+      min-width: 0;
+      appearance: none;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 12px;
+      padding: 8px 28px 8px 9px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #f8fafc;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    body.light .date-play-speed-field label,
+    body.light .date-preset-field label {
+      color: #64748b;
+    }
+
+    body.light .date-play-speed-field select,
+    body.light .date-preset-field select {
+      background: white;
+      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.16);
+    }
+
+    .date-range-slider-wrap {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      position: relative;
+      height: 44px;
+      margin-top: 0;
+      align-self: end;
+    }
+
+    .date-range-slider-track {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 12px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.35);
+      overflow: hidden;
+    }
+
+    .date-range-slider-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      border-radius: 999px;
+      background: #38bdf8;
+    }
+
+    .date-range-slider-wrap input[type="range"] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      margin: 0;
+      pointer-events: none;
+      appearance: none;
+      background: transparent;
+      accent-color: #38bdf8;
+    }
+
+    .date-range-slider-wrap input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 0;
+      height: 0;
+      border-top: 10px solid transparent;
+      border-bottom: 10px solid transparent;
+      background: transparent;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    #dateStartSlider::-webkit-slider-thumb {
+      border-left: 16px solid #38bdf8;
+      border-right: 0;
+      filter: drop-shadow(0 0 1px #e0f2fe);
+    }
+
+    #dateEndSlider::-webkit-slider-thumb {
+      border-right: 16px solid #38bdf8;
+      border-left: 0;
+      filter: drop-shadow(0 0 1px #e0f2fe);
+    }
+
+    .date-range-slider-wrap input[type="range"]::-moz-range-thumb {
+      width: 0;
+      height: 0;
+      border-top: 10px solid transparent;
+      border-bottom: 10px solid transparent;
+      background: transparent;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    #dateStartSlider::-moz-range-thumb {
+      border-left: 16px solid #38bdf8;
+      border-right: 0;
+    }
+
+    #dateEndSlider::-moz-range-thumb {
+      border-right: 16px solid #38bdf8;
+      border-left: 0;
+    }
+
+    .date-range-slider-wrap.preset-locked #dateStartSlider::-webkit-slider-thumb {
+      border-left-color: #64748b;
+      cursor: not-allowed;
+      pointer-events: none;
+      filter: drop-shadow(0 0 1px #94a3b8);
+    }
+
+    .date-range-slider-wrap.preset-locked #dateEndSlider::-webkit-slider-thumb {
+      border-right-color: #64748b;
+      cursor: not-allowed;
+      pointer-events: none;
+      filter: drop-shadow(0 0 1px #94a3b8);
+    }
+
+    .date-range-slider-wrap.preset-locked #dateStartSlider::-moz-range-thumb {
+      border-left-color: #64748b;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .date-range-slider-wrap.preset-locked #dateEndSlider::-moz-range-thumb {
+      border-right-color: #64748b;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .date-range-slider-wrap.preset-day input[type="range"]::-webkit-slider-thumb {
+      width: 0;
+      height: 0;
+      opacity: 0;
+      border: 0;
+      box-shadow: none;
+      pointer-events: none;
+    }
+
+    .date-range-slider-wrap.preset-day input[type="range"]::-moz-range-thumb {
+      width: 0;
+      height: 0;
+      opacity: 0;
+      border: 0;
+      box-shadow: none;
+      pointer-events: none;
+    }
+
+    .date-range-slider-wrap.preset-day .date-slider-label {
+      display: none;
+    }
+
+    .date-window-handle {
+      position: absolute;
+      top: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      background: #f8fafc;
+      border: 2px solid #38bdf8;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.38);
+      cursor: grab;
+      z-index: 4;
+    }
+
+    .date-window-handle::before,
+    .date-window-handle::after {
+      content: "";
+      position: absolute;
+      top: 5px;
+      bottom: 5px;
+      width: 2px;
+      border-radius: 999px;
+      background: #0f172a;
+      opacity: 0.55;
+    }
+
+    .date-window-handle::before {
+      left: 7px;
+    }
+
+    .date-window-handle::after {
+      right: 7px;
+    }
+
+    .date-window-handle:active {
+      cursor: grabbing;
+    }
+
+    .date-slider-label {
+      position: absolute;
+      top: 24px;
+      transform: translateX(-50%);
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.78);
+      color: #dbeafe;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    body.light .date-slider-label {
+      background: rgba(255, 255, 255, 0.88);
+      color: #0f172a;
+    }
+
+    .date-filter-actions {
+      display: contents;
+    }
+
+    .auto-apply-toggle {
+      grid-column: 5;
+      grid-row: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 36px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: rgba(15, 23, 42, 0.75);
+      color: #e5e7eb;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .auto-apply-toggle input {
+      width: 16px;
+      height: 16px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+
+    body.light .auto-apply-toggle {
+      background: white;
+      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.16);
+    }
+
+    #applyDateFilterButton {
+      grid-column: 6;
+      grid-row: 1;
+    }
+
+    #resetDateFilterButton {
+      grid-column: 7;
+      grid-row: 1;
+    }
+
+    #playDateAnimationButton {
+      grid-column: 9;
+      grid-row: 1;
+      position: relative;
+    }
+
+    .tooltip-wrap {
+      position: relative;
+      display: contents;
+    }
+
+    .tooltip-wrap:hover .button-tooltip,
+    .tooltip-wrap:focus-within .button-tooltip {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .button-tooltip {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: 260px;
+      z-index: 2100;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+      padding: 10px 11px;
+      border-radius: 13px;
+      background: rgba(2, 6, 23, 0.94);
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.26);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+      font-size: 12px;
+      line-height: 1.4;
+      font-weight: 500;
+    }
+
+    .button-tooltip::before {
+      content: "";
+      position: absolute;
+      top: -6px;
+      right: 24px;
+      width: 10px;
+      height: 10px;
+      background: rgba(2, 6, 23, 0.94);
+      border-left: 1px solid rgba(148, 163, 184, 0.26);
+      border-top: 1px solid rgba(148, 163, 184, 0.26);
+      transform: rotate(45deg);
+    }
+
+    body.light .button-tooltip,
+    body.light .button-tooltip::before {
+      background: rgba(255, 255, 255, 0.96);
+      color: #334155;
+      border-color: rgba(15, 23, 42, 0.14);
+    }
+
+    .mini-button {
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: rgba(15, 23, 42, 0.75);
+      color: #e5e7eb;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .mini-button:hover {
+      background: rgba(30, 41, 59, 0.95);
+    }
+
+    .mini-button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .mini-button.playing {
+      background: rgba(249, 115, 22, 0.24);
+      border-color: rgba(251, 146, 60, 0.7);
+      color: #fed7aa;
+      box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.16), 0 10px 24px rgba(249, 115, 22, 0.18);
+    }
+
+    .mini-button.playing:hover {
+      background: rgba(249, 115, 22, 0.34);
+    }
+
+    body.light .mini-button {
+      background: white;
+      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.16);
+    }
+
+    body.light .mini-button:hover {
+      background: #f1f5f9;
+    }
+
+    .privacy-note {
+      margin-top: 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(34, 197, 94, 0.11);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      color: #bbf7d0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    body.light .privacy-note {
+      color: #bbf7d0;
+      background: rgba(34, 197, 94, 0.11);
+      border-color: rgba(34, 197, 94, 0.25);
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .status-card {
+      position: relative;
+      overflow: hidden;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .status-card.percent-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--percent, 0%);
+      background: rgba(56, 189, 248, 0.16);
+      pointer-events: none;
+    }
+
+    .status-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .status-label {
+      display: block;
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 3px;
+    }
+
+    body.light .status-label {
+      color: #64748b;
+    }
+
+    .status-value {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    body.light .status-value {
+      color: #0f172a;
+    }
+
+    .import-progress {
+      display: none;
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .import-progress.visible {
+      display: block;
+    }
+
+    body.light .import-progress {
+      background: rgba(241, 245, 249, 0.88);
+      border-color: rgba(15, 23, 42, 0.12);
+    }
+
+    .import-progress-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: #cbd5e1;
+      font-weight: 700;
+    }
+
+    body.light .import-progress-header {
+      color: #475569;
+    }
+
+    .import-progress-track {
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(148, 163, 184, 0.28);
+    }
+
+    .import-progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: #38bdf8;
+      transition: width 120ms ease;
+    }
+
+    .import-progress-detail {
+      margin-top: 7px;
+      font-size: 11px;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .import-detail-item {
+      border-bottom: 1px dotted rgba(148, 163, 184, 0.55);
+      cursor: help;
+    }
+
+    body.light .import-progress-detail {
+      color: #64748b;
+    }
+
+    .log-wrapper {
+      position: relative;
+      margin-top: 14px;
+    }
+
+    .log-wrapper:hover .clear-log-button,
+    .clear-log-button:focus-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .clear-log-button {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      z-index: 2;
+      opacity: 0;
+      pointer-events: none;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 999px;
+      padding: 5px 9px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+      transition: opacity 140ms ease, background 140ms ease;
+    }
+
+    .clear-log-button:hover {
+      background: rgba(30, 41, 59, 0.98);
+    }
+
+    body.light .clear-log-button {
+      background: rgba(255, 255, 255, 0.94);
+      color: #0f172a;
+      border-color: rgba(15, 23, 42, 0.16);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+    }
+
+    .log-panel {
+      display: none;
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.45;
+      max-height: 130px;
+      overflow: auto;
+    }
+
+    .log-panel.visible {
+      display: block;
+    }
+
+    body.light .log-panel {
+      color: #475569;
+    }
+
+    .log-panel div + div {
+      margin-top: 6px;
+    }
+
+    .log-entry.error {
+      color: #fca5a5;
+      font-weight: 650;
+    }
+
+    body.light .log-entry.error {
+      color: #b91c1c;
+    }
+
+    .leaflet-control-zoom a {
+      background: rgba(15, 23, 42, 0.9) !important;
+      color: #e5e7eb !important;
+      border-color: rgba(148, 163, 184, 0.25) !important;
+    }
+
+    body.light .leaflet-control-zoom a {
+      background: rgba(255, 255, 255, 0.94) !important;
+      color: #0f172a !important;
+      border-color: rgba(15, 23, 42, 0.14) !important;
+    }
+
+    .leaflet-control-attribution {
+      background: rgba(15, 23, 42, 0.75) !important;
+      color: #cbd5e1 !important;
+      backdrop-filter: blur(10px);
+    }
+
+    body.light .leaflet-control-attribution {
+      background: rgba(255, 255, 255, 0.78) !important;
+      color: #334155 !important;
+    }
+
+    .leaflet-control-attribution a {
+      color: #93c5fd !important;
+    }
+
+    body.light .leaflet-control-attribution a {
+      color: #2563eb !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <section class="map-theme-panel" aria-label="Map style">
+    <label for="mapTheme">Map style</label>
+    <select id="mapTheme">
+      <option value="dark" selected>Dark — CARTO Dark Matter / OpenStreetMap</option>
+      <option value="light">Light — OpenStreetMap Standard</option>
+      <option value="satellite">Satellite — Esri World Imagery</option>
+    </select>
+  </section>
+
+  <section class="date-panel" aria-label="Date range filter">
+    <div class="date-filter">
+      
+      <div class="date-filter-controls">
+        <div class="date-filter-grid">
+          <div class="date-field date-from-field">
+            <label for="dateFromInput">Date from</label>
+            <input id="dateFromInput" type="date" />
+          </div>
+          <div class="date-field date-to-field">
+            <label for="dateToInput">Date to</label>
+            <input id="dateToInput" type="date" />
+          </div>
+        </div>
+        <div id="dateFilterSummary" class="date-count-pill">0 / 0 activities</div>
+        <div class="date-preset-field">
+          <label for="datePresetSelect">Presets</label>
+          <select id="datePresetSelect">
+            <option value="none" selected>None</option>
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+          </select>
+        </div>
+        <div class="date-play-speed-field">
+          <label for="playSpeedSelect">Play speed</label>
+          <select id="playSpeedSelect">
+            <option value="1" selected>1x</option>
+            <option value="10">10x</option>
+            <option value="100">100x</option>
+            <option value="1000">1000x</option>
+          </select>
+        </div>
+        <div class="date-range-slider-wrap" aria-label="Date range slider">
+          <div class="date-range-slider-track">
+            <div id="dateRangeSliderFill" class="date-range-slider-fill"></div>
+          </div>
+          <input id="dateStartSlider" type="range" min="0" max="0" value="0" />
+          <input id="dateEndSlider" type="range" min="0" max="0" value="0" />
+          <button id="dateWindowHandle" class="date-window-handle" type="button" aria-label="Move selected date range"></button>
+          <span id="dateStartLabel" class="date-slider-label">–</span>
+          <span id="dateEndLabel" class="date-slider-label">–</span>
+        </div>
+        <div class="date-filter-actions">
+          <label class="auto-apply-toggle" for="autoApplyDateFilterToggle">
+            <input id="autoApplyDateFilterToggle" type="checkbox" checked />
+            Auto-apply
+          </label>
+          <button id="applyDateFilterButton" class="mini-button" type="button">Apply</button>
+          <button id="resetDateFilterButton" class="mini-button" type="button">Reset</button>
+          <span class="tooltip-wrap">
+            <button id="playDateAnimationButton" class="mini-button" type="button" disabled>Play</button>
+            <span id="playDateAnimationTooltip" class="button-tooltip" role="tooltip">Choose a preset first.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="control-panel" aria-label="Controls">
+    <div class="panel-heading">
+      <h2>Load GPS files</h2>
+      <span class="precompute-help-wrap">
+        <label class="precompute-toggle" for="precomputeOnImportToggle">
+          <input id="precomputeOnImportToggle" type="checkbox" checked />
+          Precompute on import
+        </label>
+        <span class="nice-tooltip" role="tooltip">
+          <strong>What this does</strong>
+          When files are loaded, the app prepares lightweight helper data for faster filtering, zooming and heatmap updates later. Import can take a little longer, but using the map afterwards is much smoother with many activities.
+        </span>
+      </span>
+    </div>
+    <div class="import-intro">
+      <p>Drop GPX/GPX.GZ/FIT/FIT.GZ files or choose them manually.</p>
+      <div class="privacy-note">
+        All processing happens locally in your browser. No GPS files are uploaded.
+      </div>
+    </div>
+
+    <div id="dropZone" class="drop-zone">
+      <strong>Drop GPS files here</strong>
+      <span>or select one or more .gpx / .gpx.gz / .fit / .fit.gz files</span>
+      <button id="chooseFilesButton" class="file-button" type="button">Choose GPS files</button>
+      <input id="fileInput" type="file" accept=".gpx,.gpx.gz,.fit,.fit.gz,application/gpx+xml,application/gzip,application/x-gzip,text/xml,application/xml,application/octet-stream" multiple />
+    </div>
+
+
+    <div class="toggle-row">
+      <label for="showHeatmapToggle">Show heatmap</label>
+      <input id="showHeatmapToggle" type="checkbox" checked />
+    </div>
+
+    <div class="toggle-row">
+      <label for="showRoutesToggle">Show routes</label>
+      <input id="showRoutesToggle" type="checkbox" />
+    </div>
+
+    <div class="toggle-row">
+      <label for="autoZoomToggle">Auto-zoom</label>
+      <input id="autoZoomToggle" type="checkbox" />
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <label for="heatOpacitySlider">Heatmap opacity</label>
+        <span id="heatOpacityValue" class="slider-value">70%</span>
+      </div>
+      <input id="heatOpacitySlider" type="range" min="0" max="100" value="70" />
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <label for="heatRadiusSlider">Heatmap spread</label>
+        <span id="heatRadiusValue" class="slider-value">25 m</span>
+      </div>
+      <input id="heatRadiusSlider" type="range" min="5" max="80" value="25" />
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <label for="heatIntensitySlider">Heatmap sensitivity</label>
+        <span id="heatIntensityValue" class="slider-value">35%</span>
+      </div>
+      <input id="heatIntensitySlider" type="range" min="1" max="300" value="35" />
+    </div>
+
+    <div class="slider-row">
+      <button id="resetHeatmapButton" class="secondary-button" type="button">Reset heatmap settings</button>
+    </div>
+
+    <div class="status-row">
+      <div id="activityStatusCard" class="status-card percent-card">
+        <span class="status-label">Shown activities</span>
+        <span id="activityCount" class="status-value">0</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Shown points</span>
+        <span id="pointCount" class="status-value">0</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">First date</span>
+        <span id="firstDate" class="status-value">–</span>
+      </div>
+      <div class="status-card">
+        <span class="status-label">Last date</span>
+        <span id="lastDate" class="status-value">–</span>
+      </div>
+    </div>
+
+    <div id="importProgress" class="import-progress" aria-live="polite">
+      <div class="import-progress-header">
+        <span id="importProgressTitle">Import ready</span>
+        <span id="importProgressCount">0 / 0</span>
+      </div>
+      <div class="import-progress-track">
+        <div id="importProgressFill" class="import-progress-fill"></div>
+      </div>
+      <div id="importProgressDetail" class="import-progress-detail">Waiting for files…</div>
+    </div>
+
+    <div class="log-wrapper">
+      <div id="logPanel" class="log-panel" aria-live="polite"></div>
+      <button id="clearLogButton" class="clear-log-button" type="button">Clear</button>
+    </div>
+  </aside>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <!-- FIT parser is loaded dynamically as an ES module when the first FIT file is imported. -->
+
+  <script>
+    const VIENNA_CENTER = [48.2082, 16.3738];
+
+    const state = {
+      activities: [],
+      importedFileKeys: new Set(),
+      importedFileHashes: new Set(),
+      importedActivityFingerprints: new Set(),
+      availableDates: [],
+      dateFilter: {
+        from: null,
+        to: null,
+      },
+      datePreset: "none",
+      dateAnimation: {
+        isPlaying: false,
+        timerId: null,
+        speed: 1,
+      },
+    };
+
+    const MAX_LOG_ENTRIES = 80;
+    const DEFAULT_HEATMAP_SETTINGS = {
+      opacity: 70,
+      radius: 25,
+      intensity: 35,
+    };
+
+    // Approx. 11 m latitude grid cells. This makes the heatmap represent
+    // repeated visits through the same small area instead of raw GPS sample density.
+    const HEATMAP_GRID_PRECISION = 4;
+    const HEATMAP_SEGMENT_SAMPLE_METERS = 8;
+    // Higher value means the heatmap needs more repeated overlap before it turns red.
+    // This keeps a small set of 2-3 tracks from becoming fully red too easily.
+    const BASE_OVERLAPS_FOR_HOT_COLOR = 30;
+    const MAX_DISPLAY_ROUTE_POINTS = 600;
+    const ROUTE_COLORS = ["#38bdf8", "#22c55e", "#f97316", "#a78bfa", "#f43f5e", "#eab308", "#14b8a6", "#60a5fa"]; 
+
+    const map = L.map("map", {
+      center: VIENNA_CENTER,
+      zoom: 12,
+      zoomControl: true,
+      preferCanvas: true,
+    });
+
+    const tileLayers = {
+      dark: L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        maxZoom: 20,
+        subdomains: "abcd",
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      }),
+      light: L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }),
+      satellite: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 19,
+        attribution:
+          'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      }),
+    };
+
+    let currentTileLayer = tileLayers.dark.addTo(map);
+    const routeLayerGroup = L.layerGroup().addTo(map);
+    let heatLayer = null;
+
+    const themeSelect = document.getElementById("mapTheme");
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const chooseFilesButton = document.getElementById("chooseFilesButton");
+    const activityStatusCard = document.getElementById("activityStatusCard");
+    const activityCount = document.getElementById("activityCount");
+    const pointCount = document.getElementById("pointCount");
+    const firstDate = document.getElementById("firstDate");
+    const lastDate = document.getElementById("lastDate");
+    const logPanel = document.getElementById("logPanel");
+    const clearLogButton = document.getElementById("clearLogButton");
+    const importProgress = document.getElementById("importProgress");
+    const importProgressTitle = document.getElementById("importProgressTitle");
+    const importProgressCount = document.getElementById("importProgressCount");
+    const importProgressFill = document.getElementById("importProgressFill");
+    const importProgressDetail = document.getElementById("importProgressDetail");
+    const showRoutesToggle = document.getElementById("showRoutesToggle");
+    const precomputeOnImportToggle = document.getElementById("precomputeOnImportToggle");
+    const showHeatmapToggle = document.getElementById("showHeatmapToggle");
+    const autoZoomToggle = document.getElementById("autoZoomToggle");
+    const heatOpacitySlider = document.getElementById("heatOpacitySlider");
+    const heatOpacityValue = document.getElementById("heatOpacityValue");
+    const heatRadiusSlider = document.getElementById("heatRadiusSlider");
+    const heatRadiusValue = document.getElementById("heatRadiusValue");
+    const heatIntensitySlider = document.getElementById("heatIntensitySlider");
+    const heatIntensityValue = document.getElementById("heatIntensityValue");
+    const resetHeatmapButton = document.getElementById("resetHeatmapButton");
+    const dateFromInput = document.getElementById("dateFromInput");
+    const dateToInput = document.getElementById("dateToInput");
+    const dateFilterSummary = document.getElementById("dateFilterSummary");
+    const datePresetSelect = document.getElementById("datePresetSelect");
+    const playSpeedSelect = document.getElementById("playSpeedSelect");
+    const applyDateFilterButton = document.getElementById("applyDateFilterButton");
+    const resetDateFilterButton = document.getElementById("resetDateFilterButton");
+    const playDateAnimationButton = document.getElementById("playDateAnimationButton");
+    const playDateAnimationTooltip = document.getElementById("playDateAnimationTooltip");
+    const autoApplyDateFilterToggle = document.getElementById("autoApplyDateFilterToggle");
+    const dateStartSlider = document.getElementById("dateStartSlider");
+    const dateEndSlider = document.getElementById("dateEndSlider");
+    const dateRangeSliderFill = document.getElementById("dateRangeSliderFill");
+    const dateWindowHandle = document.getElementById("dateWindowHandle");
+    const dateStartLabel = document.getElementById("dateStartLabel");
+    const dateEndLabel = document.getElementById("dateEndLabel");
+
+    function setTheme(theme) {
+      if (!tileLayers[theme]) return;
+
+      map.removeLayer(currentTileLayer);
+      currentTileLayer = tileLayers[theme].addTo(map);
+      // Only the map tile layer changes. The app controls intentionally keep the same dark UI.
+      document.body.classList.toggle("satellite", theme === "satellite");
+
+      requestAnimationFrame(() => {
+        map.invalidateSize();
+      });
+    }
+
+    function showRuntimeError(message) {
+      logMessage(`Error: ${message}`);
+      importProgress.classList.add("visible");
+      importProgressTitle.textContent = "Import stopped";
+      importProgressDetail.textContent = message;
+    }
+
+    window.addEventListener("error", (event) => {
+      showRuntimeError(event.message || "Unknown runtime error.");
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+      showRuntimeError(event.reason?.message || String(event.reason || "Unknown async error."));
+    });
+
+    function isErrorLogMessage(message) {
+      return /error|failed|no gpx files found|could not|cannot|ignored|invalid|stopped/i.test(message);
+    }
+
+    function logMessage(message, { type = "auto" } = {}) {
+      logPanel.classList.add("visible");
+      const entry = document.createElement("div");
+      entry.className = "log-entry";
+      if (type === "error" || (type === "auto" && isErrorLogMessage(message))) {
+        entry.classList.add("error");
+      }
+      entry.textContent = message;
+      logPanel.prepend(entry);
+
+      while (logPanel.children.length > MAX_LOG_ENTRIES) {
+        logPanel.removeChild(logPanel.lastElementChild);
+      }
+    }
+
+    function formatDate(date) {
+      if (!date) return "–";
+      return new Intl.DateTimeFormat(undefined, {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(date);
+    }
+
+    function getActivityStartDateString(activity) {
+      return activity.startDate || null;
+    }
+
+    function getFilteredActivities() {
+      return state.activities.filter((activity) => {
+        const activityDate = getActivityStartDateString(activity);
+        if (!activityDate) return true;
+        if (state.dateFilter.from && activityDate < state.dateFilter.from) return false;
+        if (state.dateFilter.to && activityDate > state.dateFilter.to) return false;
+        return true;
+      });
+    }
+
+    function updateStats() {
+      const activities = getFilteredActivities();
+      const shownActivityCount = activities.length;
+      const totalActivityCount = state.activities.length;
+      const shownActivityPercent = totalActivityCount > 0 ? (shownActivityCount / totalActivityCount) * 100 : 0;
+
+      let shownPointCount = 0;
+      let firstTimestamp = null;
+      let lastTimestamp = null;
+
+      activities.forEach((activity) => {
+        if (activity.metadata) {
+          shownPointCount += activity.metadata.pointCount;
+          if (activity.metadata.startTime && (!firstTimestamp || activity.metadata.startTime < firstTimestamp)) {
+            firstTimestamp = activity.metadata.startTime;
+          }
+          if (activity.metadata.endTime && (!lastTimestamp || activity.metadata.endTime > lastTimestamp)) {
+            lastTimestamp = activity.metadata.endTime;
+          }
+          return;
+        }
+
+        shownPointCount += activity.points.length;
+        activity.points.forEach((point) => {
+          if (!point.time) return;
+          const date = new Date(point.time);
+          if (Number.isNaN(date.getTime())) return;
+          const iso = date.toISOString();
+          if (!firstTimestamp || iso < firstTimestamp) firstTimestamp = iso;
+          if (!lastTimestamp || iso > lastTimestamp) lastTimestamp = iso;
+        });
+      });
+
+      activityCount.textContent = `${shownActivityCount.toLocaleString()} / ${totalActivityCount.toLocaleString()}`;
+      activityStatusCard.style.setProperty("--percent", `${shownActivityPercent}%`);
+      pointCount.textContent = shownPointCount.toLocaleString();
+      firstDate.textContent = formatDate(firstTimestamp ? new Date(firstTimestamp) : null);
+      lastDate.textContent = formatDate(lastTimestamp ? new Date(lastTimestamp) : null);
+    }
+
+    function getRouteColor(index) {
+      return ROUTE_COLORS[index % ROUTE_COLORS.length];
+    }
+
+    function drawRoutes() {
+      routeLayerGroup.clearLayers();
+
+      if (!showRoutesToggle.checked) {
+        return;
+      }
+
+      getFilteredActivities().forEach((activity, index) => {
+        const routePoints = activity.displayPoints || activity.points;
+        const latLngs = routePoints.map((point) => [point.lat, point.lon]);
+        if (latLngs.length < 2) return;
+
+        const route = L.polyline(latLngs, {
+          color: getRouteColor(index),
+          weight: 3,
+          opacity: 0.82,
+          lineCap: "round",
+          lineJoin: "round",
+          smoothFactor: 1.2,
+        });
+
+        route.bindTooltip(activity.name || activity.fileName, {
+          sticky: true,
+          opacity: 0.9,
+        });
+
+        routeLayerGroup.addLayer(route);
+      });
+    }
+
+    function removeHeatLayer() {
+      if (heatLayer) {
+        map.removeLayer(heatLayer);
+        heatLayer = null;
+      }
+    }
+
+    function distanceMeters(a, b) {
+      const earthRadiusMeters = 6371000;
+      const lat1 = (a.lat * Math.PI) / 180;
+      const lat2 = (b.lat * Math.PI) / 180;
+      const deltaLat = ((b.lat - a.lat) * Math.PI) / 180;
+      const deltaLon = ((b.lon - a.lon) * Math.PI) / 180;
+
+      const sinLat = Math.sin(deltaLat / 2);
+      const sinLon = Math.sin(deltaLon / 2);
+      const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon;
+      return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    }
+
+    function addHeatCell(cells, cellsSeenInThisActivity, point) {
+      const cellLat = Number(point.lat).toFixed(HEATMAP_GRID_PRECISION);
+      const cellLon = Number(point.lon).toFixed(HEATMAP_GRID_PRECISION);
+      const cellKey = `${cellLat}|${cellLon}`;
+
+      // A single activity should not become hotter just because it has many
+      // GPS samples in the same place. It contributes once per cell.
+      if (cellsSeenInThisActivity.has(cellKey)) return;
+      cellsSeenInThisActivity.add(cellKey);
+
+      const existingCell = cells.get(cellKey) || {
+        latSum: 0,
+        lonSum: 0,
+        visits: 0,
+      };
+
+      existingCell.latSum += point.lat;
+      existingCell.lonSum += point.lon;
+      existingCell.visits += 1;
+      cells.set(cellKey, existingCell);
+    }
+
+    function addSegmentHeatCells(cells, cellsSeenInThisActivity, startPoint, endPoint) {
+      const segmentLength = distanceMeters(startPoint, endPoint);
+      const steps = Math.max(1, Math.ceil(segmentLength / HEATMAP_SEGMENT_SAMPLE_METERS));
+
+      for (let step = 0; step <= steps; step += 1) {
+        const t = step / steps;
+        addHeatCell(cells, cellsSeenInThisActivity, {
+          lat: startPoint.lat + (endPoint.lat - startPoint.lat) * t,
+          lon: startPoint.lon + (endPoint.lon - startPoint.lon) * t,
+        });
+      }
+    }
+
+    function addPrecomputedActivityHeatCells(cells, activity) {
+      activity.heatCells.forEach((heatCell) => {
+        const existingCell = cells.get(heatCell.key) || {
+          latSum: 0,
+          lonSum: 0,
+          visits: 0,
+        };
+
+        existingCell.latSum += heatCell.lat;
+        existingCell.lonSum += heatCell.lon;
+        existingCell.visits += 1;
+        cells.set(heatCell.key, existingCell);
+      });
+    }
+
+    function buildActivityHeatCells(activity) {
+      const cells = new Map();
+      const cellsSeenInThisActivity = new Set();
+
+      for (let index = 0; index < activity.points.length; index += 1) {
+        const point = activity.points[index];
+        const nextPoint = activity.points[index + 1];
+
+        if (nextPoint) {
+          addSegmentHeatCells(cells, cellsSeenInThisActivity, point, nextPoint);
+        } else {
+          addHeatCell(cells, cellsSeenInThisActivity, point);
+        }
+      }
+
+      return Array.from(cells.entries()).map(([key, cell]) => ({
+        key,
+        lat: cell.latSum / cell.visits,
+        lon: cell.lonSum / cell.visits,
+      }));
+    }
+
+    function getHeatmapData() {
+      const cells = new Map();
+
+      getFilteredActivities().forEach((activity) => {
+        if (activity.heatCells) {
+          addPrecomputedActivityHeatCells(cells, activity);
+          return;
+        }
+
+        const cellsSeenInThisActivity = new Set();
+
+        for (let index = 0; index < activity.points.length; index += 1) {
+          const point = activity.points[index];
+          const nextPoint = activity.points[index + 1];
+
+          if (nextPoint) {
+            addSegmentHeatCells(cells, cellsSeenInThisActivity, point, nextPoint);
+          } else {
+            addHeatCell(cells, cellsSeenInThisActivity, point);
+          }
+        }
+      });
+
+      const heatmapPoints = [];
+      let maxVisits = 0;
+
+      cells.forEach((cell) => {
+        maxVisits = Math.max(maxVisits, cell.visits);
+        heatmapPoints.push([
+          cell.latSum / cell.visits,
+          cell.lonSum / cell.visits,
+          cell.visits,
+        ]);
+      });
+
+      return { heatmapPoints, maxVisits };
+    }
+
+    function metersPerPixelAtLatitude(latitude, zoom) {
+      return (156543.03392 * Math.cos((latitude * Math.PI) / 180)) / Math.pow(2, zoom);
+    }
+
+    function getHeatmapRadiusPixels() {
+      const spreadMeters = Number(heatRadiusSlider.value);
+      const centerLat = map.getCenter().lat || VIENNA_CENTER[0];
+      const metersPerPixel = metersPerPixelAtLatitude(centerLat, map.getZoom());
+      const radiusPixels = spreadMeters / metersPerPixel;
+
+      // Keep the renderer usable at extreme zoom levels while still making the
+      // selected value mean an approximate real-world width in meters.
+      return Math.max(6, Math.min(180, Math.round(radiusPixels)));
+    }
+
+    function applyHeatmapOpacity() {
+      if (!heatLayer || !heatLayer._canvas) return;
+      heatLayer._canvas.style.opacity = String(Number(heatOpacitySlider.value) / 100);
+    }
+
+    function drawHeatmap() {
+      removeHeatLayer();
+
+      if (!showHeatmapToggle.checked || getFilteredActivities().length === 0 || !L.heatLayer) {
+        return;
+      }
+
+      const { heatmapPoints, maxVisits } = getHeatmapData();
+      if (heatmapPoints.length === 0) return;
+
+      const sensitivity = Number(heatIntensitySlider.value) / 100;
+      const visitsForHotColor = Math.max(3, BASE_OVERLAPS_FOR_HOT_COLOR / sensitivity);
+
+      heatLayer = L.heatLayer(heatmapPoints, {
+        radius: getHeatmapRadiusPixels(),
+        blur: Math.round(getHeatmapRadiusPixels() * 0.72),
+        // Use current zoom as maxZoom so Leaflet.heat does not recolor the same data
+        // differently when zooming in/out.
+        maxZoom: map.getZoom(),
+        minOpacity: 0.08,
+        max: Math.max(1, visitsForHotColor),
+        gradient: {
+          0.18: "#38bdf8",
+          0.42: "#22c55e",
+          0.68: "#eab308",
+          0.88: "#f97316",
+          1.0: "#ef4444",
+        },
+      }).addTo(map);
+
+      // Leaflet.heat does not expose a normal layer-opacity option.
+      // The heatmap itself is a canvas, so we apply visual opacity directly there.
+      requestAnimationFrame(applyHeatmapOpacity);
+    }
+
+    function updateHeatmapControlLabels() {
+      heatOpacityValue.textContent = `${heatOpacitySlider.value}%`;
+      heatRadiusValue.textContent = `${heatRadiusSlider.value} m`;
+
+      const sensitivity = Number(heatIntensitySlider.value) / 100;
+      const visitsForHotColor = Math.max(3, BASE_OVERLAPS_FOR_HOT_COLOR / sensitivity);
+      heatIntensityValue.textContent = `${heatIntensitySlider.value}% / hot at ~${visitsForHotColor.toFixed(1)} overlaps`;
+    }
+
+    function resetHeatmapSettings() {
+      heatOpacitySlider.value = String(DEFAULT_HEATMAP_SETTINGS.opacity);
+      heatRadiusSlider.value = String(DEFAULT_HEATMAP_SETTINGS.radius);
+      heatIntensitySlider.value = String(DEFAULT_HEATMAP_SETTINGS.intensity);
+      updateHeatmapControlLabels();
+    updateDateAnimationButtonState();
+      refreshMapOverlays();
+    }
+
+    function fitMapToRoutes() {
+      const bounds = L.latLngBounds([]);
+
+      getFilteredActivities().forEach((activity) => {
+        if (activity.metadata?.bounds) {
+          bounds.extend([activity.metadata.bounds.minLat, activity.metadata.bounds.minLon]);
+          bounds.extend([activity.metadata.bounds.maxLat, activity.metadata.bounds.maxLon]);
+          return;
+        }
+
+        activity.points.forEach((point) => {
+          bounds.extend([point.lat, point.lon]);
+        });
+      });
+
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, {
+          paddingTopLeft: [80, 80],
+          paddingBottomRight: [460, 120],
+          maxZoom: 15,
+        });
+      }
+    }
+
+    function parseDateOnly(dateString) {
+      const [year, month, day] = dateString.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    function formatDateOnly(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function getPresetLabel(preset) {
+      return {
+        none: "None",
+        day: "Day",
+        week: "Week",
+        month: "Month",
+        year: "Year",
+      }[preset] || preset;
+    }
+
+    function addPresetDuration(dateString, preset) {
+      const date = parseDateOnly(dateString);
+
+      if (preset === "day") {
+        date.setDate(date.getDate() + 1);
+      } else if (preset === "week") {
+        date.setDate(date.getDate() + 7);
+      } else if (preset === "month") {
+        date.setMonth(date.getMonth() + 1);
+      } else if (preset === "year") {
+        date.setFullYear(date.getFullYear() + 1);
+      }
+
+      return formatDateOnly(date);
+    }
+
+    function buildContinuousDateRange(startDateString, endDateString) {
+      const dates = [];
+      const current = parseDateOnly(startDateString);
+      const end = parseDateOnly(endDateString);
+
+      while (current <= end) {
+        dates.push(formatDateOnly(current));
+        current.setDate(current.getDate() + 1);
+      }
+
+      return dates;
+    }
+
+    function findDateIndexOnOrBefore(dateString) {
+      if (state.availableDates.length === 0) return 0;
+
+      let result = 0;
+      for (let index = 0; index < state.availableDates.length; index += 1) {
+        if (state.availableDates[index] <= dateString) {
+          result = index;
+        } else {
+          break;
+        }
+      }
+      return result;
+    }
+
+    function findDateIndexOnOrAfter(dateString) {
+      if (state.availableDates.length === 0) return 0;
+
+      for (let index = 0; index < state.availableDates.length; index += 1) {
+        if (state.availableDates[index] >= dateString) {
+          return index;
+        }
+      }
+      return state.availableDates.length - 1;
+    }
+
+    function updatePresetSliderMode() {
+      const sliderWrap = dateRangeSliderFill.parentElement.parentElement;
+      sliderWrap.classList.toggle("preset-day", state.datePreset === "day");
+      sliderWrap.classList.toggle("preset-locked", state.datePreset !== "none" && state.datePreset !== "day");
+    }
+
+    function getPresetEndIndexFromStartIndex(startIndex) {
+      if (state.availableDates.length === 0 || state.datePreset === "none") return startIndex;
+
+      const maxIndex = state.availableDates.length - 1;
+      const safeStartIndex = Math.min(Math.max(0, startIndex), maxIndex);
+      const startDate = state.availableDates[safeStartIndex];
+      const targetEndDate = addPresetDuration(startDate, state.datePreset);
+      return Math.min(maxIndex, Math.max(safeStartIndex, findDateIndexOnOrBefore(targetEndDate)));
+    }
+
+    function hasEnoughDataForPreset() {
+      if (state.datePreset === "none" || state.availableDates.length === 0) return false;
+      const startIndex = Number(dateStartSlider.value || 0);
+      const startDate = state.availableDates[startIndex] || state.availableDates[0];
+      const requiredEndDate = addPresetDuration(startDate, state.datePreset);
+      const maxDate = state.availableDates[state.availableDates.length - 1];
+      return requiredEndDate <= maxDate;
+    }
+
+    function getDateAnimationDisabledReason() {
+      if (state.datePreset === "none") return "Choose Day, Week, Month or Year first.";
+      if (state.availableDates.length === 0) return "Load GPX files with dates first.";
+      if (!hasEnoughDataForPreset()) {
+        return `${getPresetLabel(state.datePreset)} playback needs at least one full ${state.datePreset} inside the loaded date range.`;
+      }
+      return "Ready. Press Play to move this fixed date window through the loaded timeline in a loop.";
+    }
+
+    function updateDateAnimationButtonState() {
+      const canPlay = state.datePreset !== "none" && state.availableDates.length > 0 && hasEnoughDataForPreset();
+      playDateAnimationButton.disabled = !canPlay;
+      playDateAnimationButton.textContent = state.dateAnimation.isPlaying ? "Pause" : "Play";
+      playDateAnimationButton.classList.toggle("playing", state.dateAnimation.isPlaying);
+      playDateAnimationTooltip.textContent = getDateAnimationDisabledReason();
+
+      if (!canPlay && state.dateAnimation.isPlaying) {
+        stopDateAnimation();
+      }
+    }
+
+    function applyDatePresetFromStartIndex(startIndex, { apply = true } = {}) {
+      if (state.availableDates.length === 0 || state.datePreset === "none") return;
+
+      const maxIndex = state.availableDates.length - 1;
+      const safeStartIndex = Math.min(Math.max(0, startIndex), maxIndex);
+      const endIndex = getPresetEndIndexFromStartIndex(safeStartIndex);
+
+      dateStartSlider.value = String(safeStartIndex);
+      dateEndSlider.value = String(endIndex);
+      updateDateRangeSliderFill();
+      syncDateInputsFromSliders({ apply });
+      updateDateAnimationButtonState();
+    }
+
+    function setDateRangeSliderBounds() {
+      const maxIndex = Math.max(0, state.availableDates.length - 1);
+      [dateStartSlider, dateEndSlider].forEach((slider) => {
+        slider.min = "0";
+        slider.max = String(maxIndex);
+        slider.disabled = state.availableDates.length === 0;
+      });
+    }
+
+    function updateDateRangeSliderFill() {
+      const maxIndex = Math.max(1, state.availableDates.length - 1);
+      const startIndex = Number(dateStartSlider.value || 0);
+      const endIndex = Number(dateEndSlider.value || 0);
+      const left = (Math.min(startIndex, endIndex) / maxIndex) * 100;
+      const right = (Math.max(startIndex, endIndex) / maxIndex) * 100;
+      const center = (left + right) / 2;
+
+      dateRangeSliderFill.style.left = `${left}%`;
+      dateRangeSliderFill.style.width = `${Math.max(0, right - left)}%`;
+      dateWindowHandle.style.left = `${center}%`;
+
+      const startDate = state.availableDates[startIndex] || "–";
+      const endDate = state.availableDates[endIndex] || "–";
+      dateStartLabel.textContent = startDate;
+      dateEndLabel.textContent = endDate;
+      dateStartLabel.style.left = `${left}%`;
+      dateEndLabel.style.left = `${right}%`;
+    }
+
+    function syncDateInputsFromSliders({ apply = true } = {}) {
+      if (state.availableDates.length === 0) return;
+
+      let startIndex = Number(dateStartSlider.value || 0);
+      let endIndex = Number(dateEndSlider.value || 0);
+
+      if (startIndex > endIndex) {
+        const movedSlider = document.activeElement;
+        if (movedSlider === dateStartSlider) {
+          endIndex = startIndex;
+          dateEndSlider.value = String(endIndex);
+        } else {
+          startIndex = endIndex;
+          dateStartSlider.value = String(startIndex);
+        }
+      }
+
+      if (state.datePreset !== "none" && document.activeElement === dateStartSlider) {
+        applyDatePresetFromStartIndex(startIndex, { apply });
+        return;
+      }
+
+      dateFromInput.value = state.availableDates[startIndex] || "";
+      dateToInput.value = state.availableDates[endIndex] || "";
+      updateDateRangeSliderFill();
+
+      if (apply && autoApplyDateFilterToggle.checked) {
+        applyDateFilter();
+      } else {
+        updateDateFilterSummary();
+      }
+    }
+
+    function moveSelectedDateWindowToCenterIndex(centerIndex, { apply = true } = {}) {
+      if (state.availableDates.length === 0) return;
+
+      const maxIndex = state.availableDates.length - 1;
+      const startIndex = Number(dateStartSlider.value || 0);
+      const endIndex = Number(dateEndSlider.value || 0);
+      const windowSize = Math.max(0, endIndex - startIndex);
+      let newStart = Math.round(centerIndex - windowSize / 2);
+      let newEnd = newStart + windowSize;
+
+      if (newStart < 0) {
+        newStart = 0;
+        newEnd = windowSize;
+      }
+
+      if (newEnd > maxIndex) {
+        newEnd = maxIndex;
+        newStart = Math.max(0, newEnd - windowSize);
+      }
+
+      if (state.datePreset !== "none") {
+        applyDatePresetFromStartIndex(newStart, { apply });
+        return;
+      }
+
+      dateStartSlider.value = String(newStart);
+      dateEndSlider.value = String(newEnd);
+      syncDateInputsFromSliders({ apply });
+    }
+
+    function getSliderIndexFromPointerEvent(event) {
+      const rect = dateRangeSliderFill.parentElement.getBoundingClientRect();
+      const maxIndex = Math.max(0, state.availableDates.length - 1);
+      const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+      return ratio * maxIndex;
+    }
+
+    function startDateWindowDrag(event) {
+      if (state.availableDates.length === 0) return;
+      event.preventDefault();
+      dateWindowHandle.setPointerCapture(event.pointerId);
+
+      const onPointerMove = (moveEvent) => {
+        moveSelectedDateWindowToCenterIndex(getSliderIndexFromPointerEvent(moveEvent), { apply: true });
+      };
+
+      const onPointerUp = (upEvent) => {
+        dateWindowHandle.releasePointerCapture(upEvent.pointerId);
+        dateWindowHandle.removeEventListener("pointermove", onPointerMove);
+        dateWindowHandle.removeEventListener("pointerup", onPointerUp);
+        dateWindowHandle.removeEventListener("pointercancel", onPointerUp);
+      };
+
+      dateWindowHandle.addEventListener("pointermove", onPointerMove);
+      dateWindowHandle.addEventListener("pointerup", onPointerUp);
+      dateWindowHandle.addEventListener("pointercancel", onPointerUp);
+    }
+
+    function syncSlidersFromDateInputs() {
+      if (state.availableDates.length === 0) return;
+
+      const fromIndexExact = state.availableDates.indexOf(dateFromInput.value);
+      const toIndexExact = state.availableDates.indexOf(dateToInput.value);
+      const fromIndex = fromIndexExact >= 0 ? fromIndexExact : findDateIndexOnOrAfter(dateFromInput.value);
+      const toIndex = toIndexExact >= 0 ? toIndexExact : findDateIndexOnOrBefore(dateToInput.value);
+
+      dateStartSlider.value = String(fromIndex >= 0 ? fromIndex : 0);
+      dateEndSlider.value = String(toIndex >= 0 ? toIndex : state.availableDates.length - 1);
+      updateDateRangeSliderFill();
+      updateDateAnimationButtonState();
+    }
+
+    function updateDateControlsFromActivities() {
+      const activityDates = [...new Set(
+        state.activities
+          .map((activity) => activity.startDate)
+          .filter(Boolean)
+      )].sort();
+
+      state.availableDates = activityDates.length > 0
+        ? buildContinuousDateRange(activityDates[0], activityDates[activityDates.length - 1])
+        : [];
+
+      const dates = state.availableDates;
+
+      if (dates.length === 0) {
+        dateFromInput.value = "";
+        dateToInput.value = "";
+        dateFromInput.removeAttribute("min");
+        dateFromInput.removeAttribute("max");
+        dateToInput.removeAttribute("min");
+        dateToInput.removeAttribute("max");
+        dateStartSlider.value = "0";
+        dateEndSlider.value = "0";
+        setDateRangeSliderBounds();
+        updateDateRangeSliderFill();
+        dateFilterSummary.textContent = "0 / 0 activities";
+        updateDateAnimationButtonState();
+        return;
+      }
+
+      const minDate = dates[0];
+      const maxDate = dates[dates.length - 1];
+
+      [dateFromInput, dateToInput].forEach((input) => {
+        input.min = minDate;
+        input.max = maxDate;
+      });
+
+      setDateRangeSliderBounds();
+      updatePresetSliderMode();
+
+      if (!state.dateFilter.from && !state.dateFilter.to) {
+        dateFromInput.value = minDate;
+        dateToInput.value = maxDate;
+        dateStartSlider.value = "0";
+        dateEndSlider.value = String(dates.length - 1);
+      } else {
+        if (state.dateFilter.from) dateFromInput.value = state.dateFilter.from;
+        if (state.dateFilter.to) dateToInput.value = state.dateFilter.to;
+        syncSlidersFromDateInputs();
+      }
+
+      updateDateRangeSliderFill();
+      updateDateFilterSummary();
+      updateDateAnimationButtonState();
+    }
+
+    function updateDateFilterSummary() {
+      const shown = getFilteredActivities().length;
+      const total = state.activities.length;
+
+      dateFilterSummary.textContent = `${shown}/${total} activities`;
+    }
+
+    function applyDateFilter() {
+      if (state.datePreset !== "none" && dateFromInput.value && state.availableDates.length > 0) {
+        const startIndex = findDateIndexOnOrAfter(dateFromInput.value);
+        const startDate = state.availableDates[startIndex];
+        const targetEndDate = addPresetDuration(startDate, state.datePreset);
+        const endIndex = Math.min(state.availableDates.length - 1, Math.max(startIndex, findDateIndexOnOrBefore(targetEndDate)));
+        dateFromInput.value = state.availableDates[startIndex];
+        dateToInput.value = state.availableDates[endIndex];
+      }
+
+      const from = dateFromInput.value || null;
+      const to = dateToInput.value || null;
+
+      if (from && to && from > to) {
+        logMessage("Date filter ignored: start date is after end date.");
+        return;
+      }
+
+      state.dateFilter.from = from;
+      state.dateFilter.to = to;
+      syncSlidersFromDateInputs();
+      updateDateFilterSummary();
+      updateStats();
+      refreshMapOverlays({ fitBounds: true });
+      updateDateAnimationButtonState();
+    }
+
+    function resetDateFilter() {
+      state.dateFilter.from = null;
+      state.dateFilter.to = null;
+      state.datePreset = "none";
+      datePresetSelect.value = "none";
+      updateDateControlsFromActivities();
+      updateStats();
+      refreshMapOverlays({ fitBounds: true });
+      updateDateAnimationButtonState();
+    }
+
+    function advanceDateAnimationOneStep() {
+      if (!hasEnoughDataForPreset()) {
+        stopDateAnimation();
+        return;
+      }
+
+      const maxIndex = state.availableDates.length - 1;
+      const currentStartIndex = Number(dateStartSlider.value || 0);
+      let nextStartIndex = currentStartIndex + getDateAnimationPlaybackSettings().stepDays;
+
+      if (nextStartIndex > maxIndex || getPresetEndIndexFromStartIndex(nextStartIndex) >= maxIndex && addPresetDuration(state.availableDates[nextStartIndex], state.datePreset) > state.availableDates[maxIndex]) {
+        nextStartIndex = 0;
+      }
+
+      applyDatePresetFromStartIndex(nextStartIndex, { apply: true });
+    }
+
+    function getDateAnimationPlaybackSettings() {
+      const speed = Number(state.dateAnimation.speed) || 1;
+
+      if (speed === 1) return { stepDays: 1, intervalMs: 900 };
+      if (speed === 10) return { stepDays: 1, intervalMs: 90 };
+      if (speed === 100) return { stepDays: 10, intervalMs: 90 };
+      if (speed === 1000) return { stepDays: 10, intervalMs: 9 };
+
+      return { stepDays: 1, intervalMs: 900 };
+    }
+
+    function startDateAnimation() {
+      if (playDateAnimationButton.disabled || state.dateAnimation.isPlaying) return;
+      state.dateAnimation.isPlaying = true;
+      playDateAnimationButton.textContent = "Pause";
+      playDateAnimationButton.classList.add("playing");
+      const { intervalMs } = getDateAnimationPlaybackSettings();
+      state.dateAnimation.timerId = window.setInterval(advanceDateAnimationOneStep, intervalMs);
+    }
+
+    function stopDateAnimation() {
+      if (state.dateAnimation.timerId) {
+        window.clearInterval(state.dateAnimation.timerId);
+        state.dateAnimation.timerId = null;
+      }
+      state.dateAnimation.isPlaying = false;
+      playDateAnimationButton.textContent = "Play";
+      playDateAnimationButton.classList.remove("playing");
+    }
+
+    function toggleDateAnimation() {
+      if (state.dateAnimation.isPlaying) {
+        stopDateAnimation();
+      } else {
+        startDateAnimation();
+      }
+    }
+
+    function refreshMapOverlays({ fitBounds = false } = {}) {
+      drawHeatmap();
+      drawRoutes();
+
+      if (fitBounds && autoZoomToggle.checked) {
+        fitMapToRoutes();
+      }
+    }
+
+    function normalizeCoordinate(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return null;
+
+      // FIT raw coordinates are often stored as semicircles.
+      if (Math.abs(number) > 180) {
+        return number * (180 / Math.pow(2, 31));
+      }
+
+      return number;
+    }
+
+    function normalizeTimestamp(value) {
+      if (!value) return null;
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      return date.toISOString();
+    }
+
+    function parseGpx(xmlText, fileName) {
+      const parser = new DOMParser();
+      const documentXml = parser.parseFromString(xmlText, "application/xml");
+      const parserError = documentXml.querySelector("parsererror");
+
+      if (parserError) {
+        throw new Error("Could not parse XML.");
+      }
+
+      const trackPointNodes = Array.from(documentXml.getElementsByTagName("trkpt"));
+      const routePointNodes = Array.from(documentXml.getElementsByTagName("rtept"));
+      const pointNodes = trackPointNodes.length > 0 ? trackPointNodes : routePointNodes;
+
+      const nameNode = documentXml.querySelector("trk > name, rte > name, metadata > name");
+      const typeNode = documentXml.querySelector("trk > type, rte > type, type");
+
+      const points = pointNodes
+        .map((node) => {
+          const lat = Number.parseFloat(node.getAttribute("lat"));
+          const lon = Number.parseFloat(node.getAttribute("lon"));
+          const eleNode = node.getElementsByTagName("ele")[0];
+          const timeNode = node.getElementsByTagName("time")[0];
+
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return null;
+          }
+
+          return {
+            lat,
+            lon,
+            elevation: eleNode ? Number.parseFloat(eleNode.textContent) : null,
+            time: timeNode ? normalizeTimestamp(timeNode.textContent.trim()) : null,
+          };
+        })
+        .filter(Boolean);
+
+      const validPointDates = points
+        .map((point) => point.time)
+        .filter(Boolean)
+        .map((value) => new Date(value))
+        .filter((date) => !Number.isNaN(date.getTime()))
+        .sort((a, b) => a - b);
+
+      const startTime = validPointDates[0] ? validPointDates[0].toISOString() : null;
+      const endTime = validPointDates[validPointDates.length - 1] ? validPointDates[validPointDates.length - 1].toISOString() : null;
+
+      const activity = {
+        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+        fileName,
+        name: nameNode ? nameNode.textContent.trim() : fileName,
+        type: typeNode ? typeNode.textContent.trim() : "unknown",
+        startTime,
+        endTime,
+        startDate: startTime ? startTime.slice(0, 10) : null,
+        endDate: endTime ? endTime.slice(0, 10) : null,
+        points,
+      };
+
+      activity.fingerprint = createActivityFingerprint(activity);
+      return activity;
+    }
+
+    let cachedFitParserConstructor = null;
+
+    function getFitParserConstructorFromModule(module) {
+      const candidates = [
+        module?.default,
+        module?.FitParser,
+        module?.fitParser,
+        module?.FitFileParser,
+        module,
+      ];
+
+      return candidates.find((candidate) => typeof candidate === "function") || null;
+    }
+
+    async function ensureFitParserLoaded() {
+      if (cachedFitParserConstructor) return cachedFitParserConstructor;
+
+      const sources = [
+        "https://esm.sh/fit-file-parser@3.0.0?bundle",
+        "https://cdn.jsdelivr.net/npm/fit-file-parser@3.0.0/+esm",
+        "https://esm.run/fit-file-parser@3.0.0",
+      ];
+
+      for (const source of sources) {
+        try {
+          const module = await import(source);
+          const FitParserConstructor = getFitParserConstructorFromModule(module);
+          if (FitParserConstructor) {
+            cachedFitParserConstructor = FitParserConstructor;
+            return FitParserConstructor;
+          }
+        } catch (_error) {
+          // Try the next source.
+        }
+      }
+
+      return null;
+    }
+
+    async function parseFit(arrayBuffer, fileName) {
+      const FitParserConstructor = await ensureFitParserLoaded();
+
+      return new Promise((resolve, reject) => {
+        if (!FitParserConstructor) {
+          reject(new Error("FIT parser module could not be loaded. Check internet access/CDN blocking, or convert FIT files to GPX first."));
+          return;
+        }
+
+        const fitParser = new FitParserConstructor({
+          force: true,
+          mode: "list",
+          lengthUnit: "m",
+          speedUnit: "km/h",
+          temperatureUnit: "celsius",
+          elapsedRecordField: true,
+        });
+
+        fitParser.parse(new Uint8Array(arrayBuffer), (error, data) => {
+          if (error) {
+            reject(new Error(`Could not parse FIT file: ${error.message || error}`));
+            return;
+          }
+
+          const records = data?.records || data?.record_mesgs || data?.recordMesgs || [];
+          const points = records
+            .map((record) => {
+              const lat = normalizeCoordinate(record.position_lat ?? record.positionLat ?? record.lat ?? record.latitude);
+              const lon = normalizeCoordinate(record.position_long ?? record.positionLong ?? record.lon ?? record.longitude);
+
+              if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+                return null;
+              }
+
+              return {
+                lat,
+                lon,
+                elevation: Number.isFinite(Number(record.altitude)) ? Number(record.altitude) : null,
+                time: normalizeTimestamp(record.timestamp || record.time || record.start_time),
+              };
+            })
+            .filter(Boolean);
+
+          const validPointDates = points
+            .map((point) => point.time)
+            .filter(Boolean)
+            .map((value) => new Date(value))
+            .filter((date) => !Number.isNaN(date.getTime()))
+            .sort((a, b) => a - b);
+
+          const startTime = validPointDates[0] ? validPointDates[0].toISOString() : null;
+          const endTime = validPointDates[validPointDates.length - 1] ? validPointDates[validPointDates.length - 1].toISOString() : null;
+          const name = data?.activity?.name || data?.sessions?.[0]?.sport || data?.sport || fileName;
+          const type = data?.sessions?.[0]?.sport || data?.activity?.type || data?.sport || "fit";
+
+          const activity = {
+            id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+            fileName,
+            name,
+            type,
+            startTime,
+            endTime,
+            startDate: startTime ? startTime.slice(0, 10) : null,
+            endDate: endTime ? endTime.slice(0, 10) : null,
+            points,
+          };
+
+          activity.fingerprint = createActivityFingerprint(activity);
+          resolve(activity);
+        });
+      });
+    }
+
+    function roundCoordinate(value) {
+      return Number(value).toFixed(5);
+    }
+
+    function simplifyRouteForDisplay(points, maxPoints = MAX_DISPLAY_ROUTE_POINTS) {
+      if (points.length <= maxPoints) {
+        return points;
+      }
+
+      const simplified = [];
+      const stride = Math.ceil(points.length / maxPoints);
+
+      simplified.push(points[0]);
+
+      for (let index = stride; index < points.length - 1; index += stride) {
+        simplified.push(points[index]);
+      }
+
+      const lastPoint = points[points.length - 1];
+      if (simplified[simplified.length - 1] !== lastPoint) {
+        simplified.push(lastPoint);
+      }
+
+      return simplified;
+    }
+
+    function precomputeActivityMetadata(activity) {
+      const metadata = {
+        pointCount: activity.points.length,
+        startTime: null,
+        endTime: null,
+        startDate: null,
+        endDate: null,
+        bounds: null,
+        displayPointCount: 0,
+        routeSimplificationRatio: 1,
+        heatCellCount: 0,
+      };
+
+      let minLat = Infinity;
+      let maxLat = -Infinity;
+      let minLon = Infinity;
+      let maxLon = -Infinity;
+
+      activity.points.forEach((point) => {
+        minLat = Math.min(minLat, point.lat);
+        maxLat = Math.max(maxLat, point.lat);
+        minLon = Math.min(minLon, point.lon);
+        maxLon = Math.max(maxLon, point.lon);
+
+        if (!point.time) return;
+        const date = new Date(point.time);
+        if (Number.isNaN(date.getTime())) return;
+        const iso = date.toISOString();
+
+        if (!metadata.startTime || iso < metadata.startTime) {
+          metadata.startTime = iso;
+        }
+
+        if (!metadata.endTime || iso > metadata.endTime) {
+          metadata.endTime = iso;
+        }
+      });
+
+      if (Number.isFinite(minLat) && Number.isFinite(maxLat) && Number.isFinite(minLon) && Number.isFinite(maxLon)) {
+        metadata.bounds = { minLat, maxLat, minLon, maxLon };
+      }
+
+      metadata.startDate = metadata.startTime ? metadata.startTime.slice(0, 10) : null;
+      metadata.endDate = metadata.endTime ? metadata.endTime.slice(0, 10) : null;
+
+      activity.displayPoints = simplifyRouteForDisplay(activity.points);
+      activity.heatCells = buildActivityHeatCells(activity);
+      metadata.displayPointCount = activity.displayPoints.length;
+      metadata.heatCellCount = activity.heatCells.length;
+      metadata.routeSimplificationRatio = metadata.pointCount > 0
+        ? activity.displayPoints.length / metadata.pointCount
+        : 1;
+
+      activity.metadata = metadata;
+
+      activity.startTime = activity.startTime || metadata.startTime;
+      activity.endTime = activity.endTime || metadata.endTime;
+      activity.startDate = activity.startDate || metadata.startDate;
+      activity.endDate = activity.endDate || metadata.endDate;
+
+      return metadata;
+    }
+
+    function createActivityFingerprint(activity) {
+      const points = activity.points;
+      if (points.length === 0) return null;
+
+      const timedPoints = points
+        .filter((point) => point.time && !Number.isNaN(new Date(point.time).getTime()))
+        .sort((a, b) => new Date(a.time) - new Date(b.time));
+
+      const orderedPoints = timedPoints.length > 0 ? timedPoints : points;
+      const firstPoint = orderedPoints[0];
+      const lastPoint = orderedPoints[orderedPoints.length - 1];
+
+      const lats = points.map((point) => point.lat);
+      const lons = points.map((point) => point.lon);
+
+      const startTime = firstPoint.time ? new Date(firstPoint.time).toISOString() : "no-start-time";
+      const endTime = lastPoint.time ? new Date(lastPoint.time).toISOString() : "no-end-time";
+
+      const minLat = roundCoordinate(Math.min(...lats));
+      const maxLat = roundCoordinate(Math.max(...lats));
+      const minLon = roundCoordinate(Math.min(...lons));
+      const maxLon = roundCoordinate(Math.max(...lons));
+
+      return [
+        startTime,
+        endTime,
+        points.length,
+        roundCoordinate(firstPoint.lat),
+        roundCoordinate(firstPoint.lon),
+        roundCoordinate(lastPoint.lat),
+        roundCoordinate(lastPoint.lon),
+        minLat,
+        maxLat,
+        minLon,
+        maxLon,
+      ].join("|");
+    }
+
+    function createFileKey(file) {
+      return `${file.name}|${file.size}|${file.lastModified}`;
+    }
+
+    async function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+        reader.readAsText(file);
+      });
+    }
+
+    async function readFileAsArrayBuffer(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    async function decompressGzipFileToArrayBuffer(file) {
+      if (!window.DecompressionStream) {
+        throw new Error("This browser cannot decompress .gz files directly. Extract it first, or use a newer Chrome/Edge/Firefox version.");
+      }
+
+      const compressedBuffer = await readFileAsArrayBuffer(file);
+      const compressedStream = new Blob([compressedBuffer]).stream();
+      const decompressedStream = compressedStream.pipeThrough(new DecompressionStream("gzip"));
+      return new Response(decompressedStream).arrayBuffer();
+    }
+
+    async function decompressGzipFileToText(file) {
+      const decompressedBuffer = await decompressGzipFileToArrayBuffer(file);
+      return new TextDecoder().decode(decompressedBuffer);
+    }
+
+    async function readGpsFile(file) {
+      const lowerName = file.name.toLowerCase();
+
+      if (lowerName.endsWith(".gpx.gz")) {
+        const text = await decompressGzipFileToText(file);
+        return { kind: "gpx", text, hashSource: text };
+      }
+
+      if (lowerName.endsWith(".gpx")) {
+        const text = await readFileAsText(file);
+        return { kind: "gpx", text, hashSource: text };
+      }
+
+      if (lowerName.endsWith(".fit.gz")) {
+        const arrayBuffer = await decompressGzipFileToArrayBuffer(file);
+        return { kind: "fit", arrayBuffer, hashSource: arrayBuffer };
+      }
+
+      if (lowerName.endsWith(".fit")) {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        return { kind: "fit", arrayBuffer, hashSource: arrayBuffer };
+      }
+
+      throw new Error("Unsupported file type.");
+    }
+
+    async function createContentHash(content) {
+      let data;
+
+      if (content instanceof ArrayBuffer) {
+        data = content;
+      } else {
+        data = new TextEncoder().encode(String(content));
+      }
+
+      if (!crypto.subtle) {
+        const bytes = new Uint8Array(data);
+        let hash = 0;
+        for (let i = 0; i < bytes.length; i += 1) {
+          hash = (Math.imul(31, hash) + bytes[i]) | 0;
+        }
+        return `fallback-${bytes.length}-${hash}`;
+      }
+
+      const digest = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(digest))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    function formatImportTooltip(items, emptyText) {
+      if (!items || items.length === 0) return emptyText;
+
+      const maxItems = 80;
+      const visibleItems = items.slice(0, maxItems);
+      const hiddenCount = Math.max(0, items.length - maxItems);
+      const lines = visibleItems.map((item) => `${item.fileName}: ${item.reason}`);
+
+      if (hiddenCount > 0) {
+        lines.push(`… and ${hiddenCount.toLocaleString()} more`);
+      }
+
+      return lines.join("\n");
+    }
+
+    function updateImportProgress({
+      processed,
+      total,
+      currentFile = "",
+      imported = 0,
+      skipped = 0,
+      failed = 0,
+      skippedDetails = [],
+      failedDetails = [],
+      done = false,
+    }) {
+      const percent = total > 0 ? (processed / total) * 100 : 0;
+      importProgress.classList.add("visible");
+      importProgressTitle.textContent = done ? "Import finished" : "Importing files";
+      importProgressCount.textContent = `${processed.toLocaleString()} / ${total.toLocaleString()}`;
+      importProgressFill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+
+      const skippedTitle = formatImportTooltip(skippedDetails, "No skipped files.");
+      const failedTitle = formatImportTooltip(failedDetails, "No failed files.");
+      const statusHtml = `${imported.toLocaleString()} imported · <span class="import-detail-item" title="${escapeHtml(skippedTitle)}">${skipped.toLocaleString()} skipped</span> · <span class="import-detail-item" title="${escapeHtml(failedTitle)}">${failed.toLocaleString()} failed</span>`;
+
+      importProgressDetail.innerHTML = done
+        ? statusHtml
+        : `${escapeHtml(currentFile || "Preparing…")} · ${statusHtml}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function waitForBrowserFrame() {
+      return new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+
+    async function handleFiles(fileList) {
+      const receivedFiles = Array.from(fileList);
+      const files = receivedFiles.filter((file) => {
+        const lowerName = file.name.toLowerCase();
+        return lowerName.endsWith(".gpx") || lowerName.endsWith(".gpx.gz") || lowerName.endsWith(".fit") || lowerName.endsWith(".fit.gz");
+      });
+      const ignoredFiles = receivedFiles.length - files.length;
+
+      logMessage(`File selection received: ${receivedFiles.length.toLocaleString()} files, ${files.length.toLocaleString()} GPS files accepted, ${ignoredFiles.toLocaleString()} ignored.`);
+
+      if (files.length === 0) {
+        logMessage("No GPS files found. Choose files ending in .gpx, .gpx.gz, .fit or .fit.gz.");
+        return;
+      }
+
+      let importedActivities = 0;
+      let importedPoints = 0;
+      let skippedFiles = 0;
+      let failedFiles = 0;
+      let processedFiles = 0;
+      const skippedDetails = [];
+      const failedDetails = [];
+
+      updateImportProgress({
+        processed: 0,
+        total: files.length,
+        currentFile: `${files.length.toLocaleString()} GPS files accepted from ${receivedFiles.length.toLocaleString()} selected`,
+        imported: importedActivities,
+        skipped: skippedFiles,
+        failed: failedFiles,
+        skippedDetails,
+        failedDetails,
+      });
+
+      for (const file of files) {
+        try {
+          updateImportProgress({
+            processed: processedFiles,
+            total: files.length,
+            currentFile: file.name,
+            imported: importedActivities,
+            skipped: skippedFiles,
+            failed: failedFiles,
+            skippedDetails,
+            failedDetails,
+          });
+
+          const fileKey = createFileKey(file);
+
+          if (state.importedFileKeys.has(fileKey)) {
+            skippedFiles += 1;
+            skippedDetails.push({ fileName: file.name, reason: "duplicate selected file" });
+            logMessage(`${file.name}: skipped duplicate selected file.`);
+            continue;
+          }
+
+          const gpsFile = await readGpsFile(file);
+          const fileHash = await createContentHash(gpsFile.hashSource);
+
+          if (state.importedFileHashes.has(fileHash)) {
+            state.importedFileKeys.add(fileKey);
+            skippedFiles += 1;
+            skippedDetails.push({ fileName: file.name, reason: "duplicate file content" });
+            logMessage(`${file.name}: skipped duplicate file.`);
+            continue;
+          }
+
+          const activity = gpsFile.kind === "fit"
+            ? await parseFit(gpsFile.arrayBuffer, file.name)
+            : parseGpx(gpsFile.text, file.name);
+
+          if (precomputeOnImportToggle.checked) {
+            precomputeActivityMetadata(activity);
+          }
+
+          if (activity.points.length === 0) {
+            skippedFiles += 1;
+            skippedDetails.push({ fileName: file.name, reason: "no track points found" });
+            logMessage(`${file.name}: no track points found.`);
+            continue;
+          }
+
+          if (activity.fingerprint && state.importedActivityFingerprints.has(activity.fingerprint)) {
+            state.importedFileKeys.add(fileKey);
+            state.importedFileHashes.add(fileHash);
+            skippedFiles += 1;
+            skippedDetails.push({ fileName: file.name, reason: "duplicate activity" });
+            logMessage(`${file.name}: skipped duplicate activity.`);
+            continue;
+          }
+
+          state.activities.push(activity);
+          state.importedFileKeys.add(fileKey);
+          state.importedFileHashes.add(fileHash);
+          if (activity.fingerprint) {
+            state.importedActivityFingerprints.add(activity.fingerprint);
+          }
+          importedActivities += 1;
+          importedPoints += activity.points.length;
+          const lowerFileName = file.name.toLowerCase();
+          const sourceDescription = lowerFileName.endsWith(".gpx.gz")
+            ? " from compressed GPX"
+            : lowerFileName.endsWith(".fit.gz")
+              ? " from compressed FIT"
+              : lowerFileName.endsWith(".fit")
+                ? " from FIT"
+                : "";
+          logMessage(`${file.name}: imported ${activity.points.length.toLocaleString()} points${sourceDescription}${activity.metadata ? ` with precomputed metadata, ${activity.metadata.displayPointCount.toLocaleString()} display points and ${activity.metadata.heatCellCount.toLocaleString()} heat cells` : ""}.`);
+        } catch (error) {
+          failedFiles += 1;
+          failedDetails.push({ fileName: file.name, reason: error.message });
+          logMessage(`${file.name}: ${error.message}`);
+        } finally {
+          processedFiles += 1;
+          updateImportProgress({
+            processed: processedFiles,
+            total: files.length,
+            currentFile: file.name,
+            imported: importedActivities,
+            skipped: skippedFiles,
+            failed: failedFiles,
+            skippedDetails,
+            failedDetails,
+          });
+
+          if (processedFiles % 25 === 0) {
+            await waitForBrowserFrame();
+          }
+        }
+      }
+
+      updateDateControlsFromActivities();
+      updateStats();
+      await waitForBrowserFrame();
+      refreshMapOverlays({ fitBounds: importedActivities > 0 });
+      updateImportProgress({
+        processed: processedFiles,
+        total: files.length,
+        imported: importedActivities,
+        skipped: skippedFiles,
+        failed: failedFiles,
+        skippedDetails,
+        failedDetails,
+        done: true,
+      });
+      logMessage(`Import finished: ${importedActivities} activities, ${importedPoints.toLocaleString()} points.`);
+    }
+
+    themeSelect.addEventListener("change", (event) => {
+      setTheme(event.target.value);
+    });
+
+    showHeatmapToggle.addEventListener("change", () => {
+      refreshMapOverlays();
+    });
+
+    showRoutesToggle.addEventListener("change", () => {
+      refreshMapOverlays();
+    });
+
+    heatOpacitySlider.addEventListener("input", () => {
+      updateHeatmapControlLabels();
+      applyHeatmapOpacity();
+    });
+
+    [heatRadiusSlider, heatIntensitySlider].forEach((slider) => {
+      slider.addEventListener("input", () => {
+        updateHeatmapControlLabels();
+        refreshMapOverlays();
+      });
+    });
+
+    resetHeatmapButton.addEventListener("click", () => {
+      resetHeatmapSettings();
+    });
+
+    applyDateFilterButton.addEventListener("click", () => {
+      applyDateFilter();
+    });
+
+    resetDateFilterButton.addEventListener("click", () => {
+      resetDateFilter();
+    });
+
+    [dateFromInput, dateToInput].forEach((input) => {
+      input.addEventListener("change", () => {
+        syncSlidersFromDateInputs();
+        if (autoApplyDateFilterToggle.checked) {
+          applyDateFilter();
+        } else {
+          updateDateFilterSummary();
+        }
+      });
+    });
+
+    datePresetSelect.addEventListener("change", () => {
+      stopDateAnimation();
+      state.datePreset = datePresetSelect.value;
+      updatePresetSliderMode();
+
+      if (state.datePreset !== "none" && state.availableDates.length > 0) {
+        applyDatePresetFromStartIndex(Number(dateStartSlider.value || 0), { apply: autoApplyDateFilterToggle.checked });
+      } else {
+        updateDateRangeSliderFill();
+        if (autoApplyDateFilterToggle.checked) {
+          applyDateFilter();
+        }
+      }
+      updateDateAnimationButtonState();
+    });
+
+    playDateAnimationButton.addEventListener("click", () => {
+      toggleDateAnimation();
+    });
+
+    playSpeedSelect.addEventListener("change", () => {
+      state.dateAnimation.speed = Number(playSpeedSelect.value) || 1;
+
+      if (state.dateAnimation.isPlaying) {
+        stopDateAnimation();
+        startDateAnimation();
+      }
+    });
+
+    autoApplyDateFilterToggle.addEventListener("change", () => {
+      applyDateFilterButton.disabled = autoApplyDateFilterToggle.checked;
+      if (autoApplyDateFilterToggle.checked) {
+        applyDateFilter();
+      }
+    });
+
+    applyDateFilterButton.disabled = autoApplyDateFilterToggle.checked;
+
+    [dateStartSlider, dateEndSlider].forEach((slider) => {
+      slider.addEventListener("input", () => {
+        syncDateInputsFromSliders({ apply: true });
+      });
+    });
+
+    dateWindowHandle.addEventListener("pointerdown", startDateWindowDrag);
+
+    updateHeatmapControlLabels();
+
+    autoZoomToggle.addEventListener("change", () => {
+      if (autoZoomToggle.checked) {
+        fitMapToRoutes();
+      }
+    });
+
+    clearLogButton.addEventListener("click", () => {
+      logPanel.innerHTML = "";
+      logPanel.classList.add("visible");
+    });
+
+    chooseFilesButton.addEventListener("click", () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", (event) => {
+      handleFiles(event.target.files);
+      fileInput.value = "";
+    });
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      window.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropZone.classList.add("drag-over");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      window.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropZone.classList.remove("drag-over");
+      });
+    });
+
+    window.addEventListener("drop", (event) => {
+      handleFiles(event.dataTransfer.files);
+    });
+
+    map.on("zoomend moveend", () => {
+      if (heatLayer) {
+        drawHeatmap();
+      }
+    });
+
+    window.addEventListener("load", () => {
+      setTimeout(() => map.invalidateSize(), 100);
+      setTimeout(() => map.invalidateSize(), 500);
+    });
+
+    window.addEventListener("resize", () => {
+      map.invalidateSize();
+    });
+  </script>
+</body>
+</html>
